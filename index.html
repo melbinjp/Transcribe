@@ -1,146 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Audio Transcription App</title>
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0"></script>
-    <style>
-        body { font-family: Arial, sans-serif; display: flex; max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .main-content { flex: 2; padding-right: 20px; }
-        .sidebar { flex: 1; background-color: #f0f0f0; padding: 20px; border-radius: 5px; }
-        button { margin: 10px 0; padding: 10px; cursor: pointer; }
-        #transcription { white-space: pre-wrap; margin-top: 20px; }
-        #progressBar { width: 100%; background-color: #ddd; }
-        #progressBar div { height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white; }
-        .status { margin-top: 10px; font-weight: bold; }
-        .error { color: red; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Transcription</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="main-content">
-        <h1>Advanced Audio Transcription App</h1>
-        <input type="file" id="audioFile" accept="audio/*" multiple>
-        <button id="transcribeButton">Transcribe</button>
-        <div id="progressBar"><div></div></div>
-        <div id="status" class="status"></div>
-        <div id="transcription"></div>
+  <div class="container">
+    <header>
+      <h1>Real-Time Transcription</h1>
+      <p>Transcribe audio in real-time with timestamps.</p>
+    </header>
+
+    <!-- Controls Section -->
+    <div class="controls">
+      <button id="start-btn" class="button">Start Transcription</button>
+      <button id="stop-btn" class="button" disabled>Stop Transcription</button>
+      <select id="language-select" class="dropdown">
+        <option value="en-GB" selected>English (UK)</option>
+        <option value="ml-IN">Malayalam</option>
+        <option value="hi-IN">Hindi</option>
+      </select>
+      <button id="download-btn" class="button" disabled>Download SRT</button>
     </div>
-    <div class="sidebar">
-        <h2>Status Sidebar</h2>
-        <h3>Queue</h3>
-        <ul id="queueList"></ul>
-        <h3>History</h3>
-        <ul id="historyList"></ul>
-        <div id="estimatedTime"></div>
+
+    <!-- Transcription Box -->
+    <div id="transcription-box" class="transcription-container">
+      <textarea id="transcription" placeholder="Transcribed text will appear here..." readonly></textarea>
     </div>
 
-    <script>
-        let pipeline;
-        const transcriptionQueue = new AudioTranscriptionQueue();
-        const averageTranscriptionSpeed = 0.5; // Adjust based on actual performance
+    <!-- Footer -->
+    <footer>
+      <p>&copy; 2024 Real-Time Transcription Tool</p>
+    </footer>
+  </div>
 
-        class AudioTranscriptionQueue {
-            constructor() {
-                this.queue = [];
-                this.history = [];
-                this.currentFile = null;
-            }
-
-            addToQueue(audioFiles) {
-                for (let file of audioFiles) {
-                    this.queue.push(file);
-                }
-                this.updateQueueDisplay();
-                this.updateEstimatedTime();
-            }
-
-            async processQueue() {
-                if (this.queue.length > 0 && !this.currentFile) {
-                    this.currentFile = this.queue.shift();
-                    this.updateQueueDisplay();
-                    await this.transcribeFile(this.currentFile);
-                    this.history.push(this.currentFile.name);
-                    this.updateHistoryDisplay();
-                    this.currentFile = null;
-                    this.processQueue();
-                }
-            }
-
-            async transcribeFile(file) {
-                updateStatus(`Transcribing: ${file.name}`);
-                try {
-                    const audioArrayBuffer = await file.arrayBuffer();
-                    const audioContext = new AudioContext();
-                    const audioBuffer = await audioContext.decodeAudioData(audioArrayBuffer);
-                    const audioData = audioBuffer.getChannelData(0);
-
-                    const result = await pipeline(audioData, {
-                        chunk_length_s: 30,
-                        stride_length_s: 5,
-                        language: 'english',
-                        task: 'transcribe',
-                        callback_function: updateProgress
-                    });
-
-                    document.getElementById('transcription').textContent += `\n\n${file.name}:\n${result.text}`;
-                    updateStatus(`Completed: ${file.name}`);
-                } catch (error) {
-                    console.error('Transcription error:', error);
-                    updateStatus(`Error transcribing ${file.name}: ${error.message}`, true);
-                }
-            }
-
-            updateQueueDisplay() {
-                const queueList = document.getElementById('queueList');
-                queueList.innerHTML = this.queue.map(file => `<li>${file.name}</li>`).join('');
-            }
-
-            updateHistoryDisplay() {
-                const historyList = document.getElementById('historyList');
-                historyList.innerHTML = this.history.map(file => `<li>${file}</li>`).join('');
-            }
-
-            updateEstimatedTime() {
-                const totalTime = this.queue.reduce((sum, file) => sum + file.size / 16000, 0); // Assuming 16kHz sample rate
-                const estimatedTime = totalTime / averageTranscriptionSpeed;
-                document.getElementById('estimatedTime').textContent = `Estimated time: ${estimatedTime.toFixed(2)} minutes`;
-            }
-        }
-
-        async function initWhisper() {
-            try {
-                updateStatus('Initializing Whisper model...');
-                pipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
-                updateStatus('Whisper model initialized successfully.');
-            } catch (error) {
-                console.error('Whisper initialization error:', error);
-                updateStatus(`Error initializing Whisper: ${error.message}`, true);
-            }
-        }
-
-        function updateStatus(message, isError = false) {
-            const statusElement = document.getElementById('status');
-            statusElement.textContent = message;
-            statusElement.className = isError ? 'status error' : 'status';
-        }
-
-        function updateProgress(progress) {
-            const progressBar = document.getElementById('progressBar').firstChild;
-            const percentage = Math.round(progress * 100);
-            progressBar.style.width = `${percentage}%`;
-            progressBar.textContent = `${percentage}%`;
-        }
-
-        document.getElementById('audioFile').addEventListener('change', (event) => {
-            transcriptionQueue.addToQueue(event.target.files);
-        });
-
-        document.getElementById('transcribeButton').addEventListener('click', () => {
-            transcriptionQueue.processQueue();
-        });
-
-        initWhisper();
-    </script>
+  <script src="script.js"></script>
 </body>
 </html>
